@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Expense tracker</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f6b5c">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{--bg:#f3f6f4;--surface:#fff;--ink:#16302b;--muted:#5d716c;--line:#d5dfdb;--accent:#0f6b5c;--accent-ink:#fff;--danger:#b3372b;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1b18;--surface:#172824;--ink:#e6f0ec;--muted:#93a9a3;--line:#2a403b;--accent:#4fc3a8;--accent-ink:#0b1b17;--danger:#ff8a7a}}
+:root[data-theme="dark"]{--bg:#0f1b18;--surface:#172824;--ink:#e6f0ec;--muted:#93a9a3;--line:#2a403b;--accent:#4fc3a8;--accent-ink:#0b1b17;--danger:#ff8a7a}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Trebuchet MS","Segoe UI",system-ui,sans-serif}
+main{max-width:560px;margin:0 auto;padding:20px 16px 48px}
+h1{font:700 1.5rem/1.2 Georgia,"Times New Roman",serif;margin:0 0 4px}
+.sub{color:var(--muted);margin:0 0 20px}
+.total{background:var(--accent);color:var(--accent-ink);border-radius:14px;padding:20px;margin-bottom:16px}
+.total small{display:block;opacity:.85}
+.total strong{font:700 2.6rem/1.1 Georgia,serif}
+form{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+label{display:flex;flex-direction:column;font-size:.85rem;color:var(--muted);gap:4px}
+.full{grid-column:1/-1}
+input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;min-width:0}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+button.add{grid-column:1/-1;font:inherit;font-weight:700;background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;padding:12px;cursor:pointer}
+.bars{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:16px}
+.bars h2,.list h2{font-size:1rem;margin:0 0 10px}
+.row{display:grid;grid-template-columns:90px 1fr auto;gap:10px;align-items:center;margin:6px 0;font-size:.9rem}
+.track{height:10px;background:var(--bg);border-radius:5px;overflow:hidden}
+.fill{height:100%;background:var(--accent);border-radius:5px;transition:width .3s}
+.item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.item small{color:var(--muted);display:block}
+.amt{font-weight:700;white-space:nowrap}
+.del{background:none;border:0;color:var(--danger);font:inherit;cursor:pointer;padding:6px}
+.empty{color:var(--muted);padding:12px 0}
+.filter{margin-bottom:10px}
+@media (prefers-reduced-motion:reduce){.fill{transition:none}}
+</style>
+</head>
+<body>
+<main>
+<h1>Expense tracker</h1>
+<p class="sub">Log what you spend and see where it goes.</p>
+
+<div class="total"><small id="monthLabel">This month</small><strong id="total">$0.00</strong></div>
+
+<form id="f">
+<label class="full">What was it for?<input id="desc" required maxlength="60" placeholder="Coffee, bus pass, groceries"></label>
+<label>Amount ($)<input id="amt" type="number" min="0.01" step="0.01" required inputmode="decimal" placeholder="0.00"></label>
+<label>Category<select id="cat"><option>Food</option><option>Transport</option><option>Bills</option><option>Fun</option><option>Shopping</option><option>Other</option></select></label>
+<label class="full">Date<input id="date" type="date" required></label>
+<button class="add" type="submit">Add expense</button>
+</form>
+
+<section class="bars"><h2>By category</h2><div id="bars"></div></section>
+
+<section class="list">
+<h2>Expenses</h2>
+<label class="filter">Show<select id="filter"><option value="month">This month</option><option value="all">All time</option></select></label>
+<div id="list"></div>
+</section>
+</main>
+
+<script>
+var items=[];
+try{items=JSON.parse(localStorage.getItem("expenses")||"[]")}catch(e){items=[]}
+var $=function(id){return document.getElementById(id)};
+var fmt=function(n){return "$"+n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,",")};
+var today=new Date();
+function iso(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+$("date").value=iso(today);
+$("monthLabel").textContent=today.toLocaleString("en-US",{month:"long",year:"numeric"})+" total";
+function save(){try{localStorage.setItem("expenses",JSON.stringify(items))}catch(e){}}
+function esc(s){var d=document.createElement("div");d.textContent=s;return d.innerHTML}
+function render(){
+  var ym=iso(today).slice(0,7);
+  var month=items.filter(function(x){return x.date.slice(0,7)===ym});
+  $("total").textContent=fmt(month.reduce(function(a,x){return a+x.amt},0));
+  var by={};month.forEach(function(x){by[x.cat]=(by[x.cat]||0)+x.amt});
+  var keys=Object.keys(by).sort(function(a,b){return by[b]-by[a]});
+  var max=keys.length?by[keys[0]]:1;
+  $("bars").innerHTML=keys.length?keys.map(function(k){return '<div class="row"><span>'+k+'</span><div class="track"><div class="fill" style="width:'+(by[k]/max*100)+'%"></div></div><span>'+fmt(by[k])+'</span></div>'}).join(""):'<div class="empty">No spending this month yet.</div>';
+  var shown=($("filter").value==="all"?items:month).slice().sort(function(a,b){return b.date.localeCompare(a.date)||b.id-a.id});
+  $("list").innerHTML=shown.length?shown.map(function(x){return '<div class="item"><div>'+esc(x.desc)+'<small>'+x.cat+' · '+x.date+'</small></div><div><span class="amt">'+fmt(x.amt)+'</span> <button class="del" data-id="'+x.id+'" aria-label="Delete '+esc(x.desc)+'">Delete</button></div></div>'}).join(""):'<div class="empty">Nothing here yet. Add your first expense above.</div>';
+}
+$("f").addEventListener("submit",function(e){
+  e.preventDefault();
+  var a=parseFloat($("amt").value);
+  if(!(a>0))return;
+  items.push({id:Date.now(),desc:$("desc").value.trim(),amt:a,cat:$("cat").value,date:$("date").value});
+  save();$("desc").value="";$("amt").value="";$("desc").focus();render();
+});
+$("list").addEventListener("click",function(e){
+  var id=e.target.getAttribute&&e.target.getAttribute("data-id");
+  if(!id)return;
+  items=items.filter(function(x){return String(x.id)!==id});save();render();
+});
+$("filter").addEventListener("change",render);
+render();
+if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){})})}
+</script>
+</body>
+</html>
